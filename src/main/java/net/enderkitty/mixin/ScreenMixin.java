@@ -5,20 +5,20 @@ import net.enderkitty.config.ScreenEntry;
 import net.enderkitty.config.SimpleCloseButtonConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.AbstractParentElement;
-import net.minecraft.client.gui.Drawable;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.screen.ButtonTextures;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
-import net.minecraft.client.gui.screen.ingame.RecipeBookScreen;
-import net.minecraft.client.gui.tooltip.Tooltip;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TexturedButtonWidget;
-import net.minecraft.screen.GenericContainerScreenHandler;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.ImageButton;
+import net.minecraft.client.gui.components.Renderable;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.components.WidgetSprites;
+import net.minecraft.client.gui.components.events.AbstractContainerEventHandler;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
+import net.minecraft.client.gui.screens.inventory.ContainerScreen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.inventory.ChestMenu;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -29,30 +29,30 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Environment(value= EnvType.CLIENT)
 @Mixin(Screen.class)
-public abstract class ScreenMixin extends AbstractParentElement implements Drawable {
-    @Unique private static final ButtonTextures TEXTURES = new ButtonTextures(
-            Identifier.of(SimpleCloseButton.MOD_ID, "widget/close_button"), 
-            Identifier.of(SimpleCloseButton.MOD_ID, "widget/close_button_highlighted")
+public abstract class ScreenMixin extends AbstractContainerEventHandler implements Renderable {
+    @Unique private static final WidgetSprites TEXTURES = new WidgetSprites(
+            Identifier.fromNamespaceAndPath(SimpleCloseButton.MOD_ID, "widget/close_button"),
+            Identifier.fromNamespaceAndPath(SimpleCloseButton.MOD_ID, "widget/close_button_highlighted")
     );
-    @Unique ButtonWidget closeButton = new TexturedButtonWidget(this.width / 2 + 73, this.height / 2 + 80, 12, 12, TEXTURES, button -> {
-        if (Screen.hasShiftDown()) MinecraftClient.getInstance().setScreen(null); else this.close();
+    @Unique Button closeButton = new ImageButton(0, 0, 12, 12, TEXTURES, button -> {
+        this.onClose();
     });
     @Unique SimpleCloseButtonConfig config = SimpleCloseButtonConfig.HANDLER.instance();
     
     
-    @Shadow public abstract void close();
-    @Shadow protected abstract <T extends Element & Drawable> T addDrawableChild(T drawableElement);
+    @Shadow public abstract void onClose();
+    @Shadow protected abstract <T extends GuiEventListener & Renderable & net.minecraft.client.gui.narration.NarratableEntry> T addRenderableWidget(T drawableElement);
     @Shadow public int width;
     @Shadow public int height;
-    @Shadow @Nullable protected MinecraftClient client;
+    @Shadow @Nullable protected Minecraft minecraft;
     
     
-    @Inject(method = "init(Lnet/minecraft/client/MinecraftClient;II)V", at = @At("TAIL"))
-    public final void initCloseButtons(MinecraftClient client, int width, int height, CallbackInfo ci) {
-        if (config.modEnabled) {
-            if (client.currentScreen instanceof GenericContainerScreen && config.chestInventory && client.player != null) {
-                GenericContainerScreenHandler handler = (GenericContainerScreenHandler) client.player.currentScreenHandler;
-                switch (handler.getRows()) {
+    @Inject(method = "init()V", at = @At("TAIL"))
+    public final void initCloseButtons(CallbackInfo ci) {
+        if (config.modEnabled && minecraft != null) {
+            if (minecraft.screen instanceof ContainerScreen && config.chestInventory && minecraft.player != null) {
+                ChestMenu handler = (ChestMenu) minecraft.player.containerMenu;
+                switch (handler.getRowCount()) {
                     case 1 -> closeButtonWidget(config.chestInventoryX, config.chestInventoryY1);
                     case 2 -> closeButtonWidget(config.chestInventoryX, config.chestInventoryY2);
                     case 3 -> closeButtonWidget(config.chestInventoryX, config.chestInventoryY3);
@@ -63,9 +63,9 @@ public abstract class ScreenMixin extends AbstractParentElement implements Drawa
             }
             
             for (ScreenEntry screenEntry : config.screens) {
-                if (client.currentScreen != null && client.currentScreen.getClass().getCanonicalName() != null &&
-                        client.currentScreen.getClass().getCanonicalName().equals(screenEntry.screen())) {
-                    if (screenEntry.recipeBook() && client.currentScreen instanceof RecipeBookScreen<?> screenWithBook && ((RecipeBookAccessor) screenWithBook).getRecipeBook().isOpen()) {
+                if (minecraft.screen != null && minecraft.screen.getClass().getCanonicalName() != null &&
+                        minecraft.screen.getClass().getCanonicalName().equals(screenEntry.screen())) {
+                    if (screenEntry.recipeBook() && minecraft.screen instanceof AbstractRecipeBookScreen<?> screenWithBook && ((RecipeBookAccessor) screenWithBook).getRecipeBookComponent().isVisible()) {
                         closeButtonWidget(screenEntry.bookX(), screenEntry.bookY());
                     } else {
                         closeButtonWidget(screenEntry.x(), screenEntry.y());
@@ -75,14 +75,14 @@ public abstract class ScreenMixin extends AbstractParentElement implements Drawa
         }
     }
     
-    @Inject(method = "tick", at = @At("HEAD"))
+    @Inject(method = "tick()V", at = @At("HEAD"))
     public void tick(CallbackInfo ci) {
         if (config.modEnabled) {
             for (ScreenEntry screenEntry : config.screens) {
-                if (client != null && client.currentScreen != null && client.currentScreen.getClass().getCanonicalName() != null &&
-                        client.currentScreen.getClass().getCanonicalName().equals(screenEntry.screen())
-                        && screenEntry.recipeBook() && client.currentScreen instanceof RecipeBookScreen<?> screenWithBook) {
-                    if (((RecipeBookAccessor) screenWithBook).getRecipeBook().isOpen()) {
+                if (minecraft != null && minecraft.screen != null && minecraft.screen.getClass().getCanonicalName() != null &&
+                        minecraft.screen.getClass().getCanonicalName().equals(screenEntry.screen())
+                        && screenEntry.recipeBook() && minecraft.screen instanceof AbstractRecipeBookScreen<?> screenWithBook) {
+                    if (((RecipeBookAccessor) screenWithBook).getRecipeBookComponent().isVisible()) {
                         closeButton.setPosition(this.width / 2 + screenEntry.bookX(), this.height / 2 - screenEntry.bookY());
                     } else {
                         closeButton.setPosition(this.width / 2 + screenEntry.x(), this.height / 2 - screenEntry.y());
@@ -94,10 +94,10 @@ public abstract class ScreenMixin extends AbstractParentElement implements Drawa
     
     @Unique
     public void closeButtonWidget(int x, int y) {
-        if (client != null && client.currentScreen != null) {
+        if (minecraft != null && minecraft.screen != null) {
             closeButton.setPosition(this.width / 2 + x, this.height / 2 - y);
-            if (config.tooltip) closeButton.setTooltip(Tooltip.of(Text.translatable("simple-close-button.button.tooltip")));
-            addDrawableChild(closeButton);
+            if (config.tooltip) closeButton.setTooltip(Tooltip.create(Component.translatable("simple-close-button.button.tooltip")));
+            addRenderableWidget(closeButton);
         }
     }
 }

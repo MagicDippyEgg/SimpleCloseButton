@@ -11,10 +11,10 @@ import dev.isxander.yacl3.gui.AbstractWidget;
 import dev.isxander.yacl3.gui.LowProfileButtonWidget;
 import dev.isxander.yacl3.gui.YACLScreen;
 import net.enderkitty.mixin.OptionListAccessor;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Element;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.network.chat.Component;
 
 import java.util.Arrays;
 import java.util.List;
@@ -47,7 +47,7 @@ public class ScreenEntryController extends ControllerHelper<ScreenEntry> {
                     ScreenEntry entry = option.pendingValue();
                     option.requestSet(new ScreenEntry(value, entry.x(), entry.y(), entry.recipeBook(), entry.bookX(), entry.bookY()));
                 },
-                Text.translatable("config.option.list_screens")
+                Component.translatable("config.option.list_screens")
         ).controller();
         this.x = createOption("X:", x,
                 () -> option.pendingValue().x(),
@@ -55,7 +55,7 @@ public class ScreenEntryController extends ControllerHelper<ScreenEntry> {
                     ScreenEntry entry = option.pendingValue();
                     option.requestSet(new ScreenEntry(entry.screen(), value, entry.y(), entry.recipeBook(), entry.bookX(), entry.bookY()));
                 },
-                Text.translatable("config.option.list_x")
+                Component.translatable("config.option.list_x")
         ).controller();
         this.y = createOption("Y:", y,
                 () -> option.pendingValue().y(),
@@ -63,7 +63,7 @@ public class ScreenEntryController extends ControllerHelper<ScreenEntry> {
                     ScreenEntry entry = option.pendingValue();
                     option.requestSet(new ScreenEntry(entry.screen(), entry.x(), value, entry.recipeBook(), entry.bookX(), entry.bookY()));
                 },
-                Text.translatable("config.option.list_y")
+                Component.translatable("config.option.list_y")
         ).controller();
         this.recipeBook = createOption("Has Recipe Book:", recipeBook,
                 () -> option.pendingValue().recipeBook(),
@@ -71,7 +71,7 @@ public class ScreenEntryController extends ControllerHelper<ScreenEntry> {
                     ScreenEntry entry = option.pendingValue();
                     option.requestSet(new ScreenEntry(entry.screen(), entry.x(), entry.y(), value, entry.bookX(), entry.bookY()));
                 },
-                Text.translatable("config.option.list_recipeBook")
+                Component.translatable("config.option.list_recipeBook")
         ).controller();
         this.bookX = createOption("X with book:", bookX,
                 () -> option.pendingValue().bookX(),
@@ -79,7 +79,7 @@ public class ScreenEntryController extends ControllerHelper<ScreenEntry> {
                     ScreenEntry entry = option.pendingValue();
                     option.requestSet(new ScreenEntry(entry.screen(), entry.x(), entry.y(), entry.recipeBook(), value, entry.bookY()));
                 },
-                Text.translatable("config.option.list_bookX")
+                Component.translatable("config.option.list_bookX")
         ).controller();
         this.bookY = createOption("Y with book:", bookY,
                 () -> option.pendingValue().bookY(),
@@ -87,7 +87,7 @@ public class ScreenEntryController extends ControllerHelper<ScreenEntry> {
                     ScreenEntry entry = option.pendingValue();
                     option.requestSet(new ScreenEntry(entry.screen(), entry.x(), entry.y(), entry.recipeBook(), entry.bookX(), value));
                 },
-                Text.translatable("config.option.list_bookY")
+                Component.translatable("config.option.list_bookY")
         ).controller();
     }
     
@@ -133,39 +133,36 @@ public class ScreenEntryController extends ControllerHelper<ScreenEntry> {
             this.bookX = bookX;
             this.bookY = bookY;
             
-            this.collapseWidget = new LowProfileButtonWidget(dim.x(), dim.y(), 20, 20, Text.literal(control.collapsed ? "▶" : "▼"),
+            this.collapseWidget = new LowProfileButtonWidget(dim.x(), dim.y(), 20, 20, Component.literal(control.collapsed ? "▶" : "▼"),
                     button -> {
                         control.setCollapsed(!control.collapsed);
-                        button.setMessage(Text.literal(control.collapsed ? "▶" : "▼"));
+                        button.setMessage(Component.literal(control.collapsed ? "▶" : "▼"));
                         
                         if (yaclScreen.tabManager.getCurrentTab() instanceof YACLScreen.CategoryTab categoryTab) {
-                            ((OptionListAccessor) categoryTab).getOptionList().getList().refreshOptions();
+                            ((OptionListAccessor) categoryTab).getOptionList().getType().refreshOptions();
                         }
                     }
             );
         }
         
         @Override
-        public void render(DrawContext graphics, int mouseX, int mouseY, float delta) {
-            collapseWidget.render(graphics, mouseX, mouseY, delta);
+        public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+            collapseWidget.extractRenderState(graphics, mouseX, mouseY, delta);
             
             if (control.collapsed) {
                 try {
-                    graphics.drawText(MinecraftClient.getInstance().textRenderer,
-                            Class.forName(control.option().pendingValue().screen()).getSimpleName(),
-                            collapseWidget.getX() + 30, collapseWidget.getY() + 7,
-                            16777215, true
-                    );
+                    graphics.textRenderer().accept(collapseWidget.getX() + 30, collapseWidget.getY() + 7,
+                            Component.literal(Class.forName(control.option().pendingValue().screen()).getSimpleName()));
                 } catch (ClassNotFoundException ignored) {}
             }
             
             if (!control.collapsed) {
-                screen.render(graphics, mouseX, mouseY, delta);
-                x.render(graphics, mouseX, mouseY, delta);
-                y.render(graphics, mouseX, mouseY, delta);
-                recipeBook.render(graphics, mouseX, mouseY, delta);
-                bookX.render(graphics, mouseX, mouseY, delta);
-                bookY.render(graphics, mouseX, mouseY, delta);
+                screen.extractRenderState(graphics, mouseX, mouseY, delta);
+                x.extractRenderState(graphics, mouseX, mouseY, delta);
+                y.extractRenderState(graphics, mouseX, mouseY, delta);
+                recipeBook.extractRenderState(graphics, mouseX, mouseY, delta);
+                bookX.extractRenderState(graphics, mouseX, mouseY, delta);
+                bookY.extractRenderState(graphics, mouseX, mouseY, delta);
             }
             
             control.bookX.option().setAvailable(control.option().pendingValue().recipeBook());
@@ -201,7 +198,7 @@ public class ScreenEntryController extends ControllerHelper<ScreenEntry> {
         }
 
         @Override
-        public List<Element> guiEventsListeners() {
+        public List<? extends GuiEventListener> guiEventsListeners() {
             return Arrays.asList(collapseWidget, screen, x, y, recipeBook, bookX, bookY);
         }
     }

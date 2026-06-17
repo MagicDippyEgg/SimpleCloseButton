@@ -5,7 +5,7 @@ import dev.isxander.yacl3.api.Option;
 import dev.isxander.yacl3.api.OptionDescription;
 import dev.isxander.yacl3.api.StateManager;
 import dev.isxander.yacl3.api.controller.ControllerBuilder;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -23,13 +23,13 @@ public abstract class ControllerHelper<T> implements Controller<T> {
         return option;
     }
     @Override
-    public Text formatValue() {
-        return Text.empty();
+    public Component formatValue() {
+        return Component.empty();
     }
     
-    public static <T> Option<T> createOption(String name, Function<Option<T>, ControllerBuilder<T>> controllerBuilder, Supplier<T> get, Consumer<T> set, Text desc) {
+    public static <T> Option<T> createOption(String name, Function<Option<T>, ControllerBuilder<T>> controllerBuilder, Supplier<T> get, Consumer<T> set, Component desc) {
         return Option.<T>createBuilder()
-                .name(Text.literal(name))
+                .name(Component.literal(name))
                 .description(OptionDescription.of(desc))
                 .stateManager(StateManager.createInstant(get.get(), get, set))
                 .controller(controllerBuilder)
